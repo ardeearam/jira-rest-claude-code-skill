@@ -58,17 +58,17 @@ python3 ~/.claude/skills/jira-rest/scripts/jira.py <command> [args...]
 python3 ~/.claude/skills/jira-rest/scripts/jira.py myself
 
 # Get a ticket
-python3 ~/.claude/skills/jira-rest/scripts/jira.py get PAC-1234
+python3 ~/.claude/skills/jira-rest/scripts/jira.py get PROJ-1234
 
 # Search open tickets
-python3 ~/.claude/skills/jira-rest/scripts/jira.py search "project = PAC AND status != Done ORDER BY updated DESC"
+python3 ~/.claude/skills/jira-rest/scripts/jira.py search "project = PROJ AND status != Done ORDER BY updated DESC"
 
 # Add a comment
-python3 ~/.claude/skills/jira-rest/scripts/jira.py add-comment PAC-1234 "Investigated -- root cause is in the auth middleware."
+python3 ~/.claude/skills/jira-rest/scripts/jira.py add-comment PROJ-1234 "Investigated -- root cause is in the auth middleware."
 
 # List transitions, then execute one
-python3 ~/.claude/skills/jira-rest/scripts/jira.py transitions PAC-1234
-python3 ~/.claude/skills/jira-rest/scripts/jira.py transition PAC-1234 31
+python3 ~/.claude/skills/jira-rest/scripts/jira.py transitions PROJ-1234
+python3 ~/.claude/skills/jira-rest/scripts/jira.py transition PROJ-1234 31
 ```
 
 ## Notes
