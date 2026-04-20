@@ -5,39 +5,96 @@ description: Access and modify JIRA tickets via REST API. Use when the user ment
 
 You are equipped to interact with JIRA using its REST API via a local Python helper. No external packages required -- stdlib only.
 
+---
+
+## !! CRITICAL RULES — READ THIS BEFORE ANYTHING ELSE !!
+
+**YOU MUST USE `AskUserQuestion` TO COLLECT ALL INPUT FROM THE USER.**
+
+**NEVER assume, guess, or infer values for URLs, emails, tokens, passwords, ticket IDs, or any other user-provided data.**
+
+**ALWAYS use `AskUserQuestion`. ALWAYS. ALWAYS. ALWAYS.**
+
+If you do not use `AskUserQuestion` and instead make assumptions or read from context, **YOU ARE DOING IT WRONG.** Stop. Go back. Ask explicitly using `AskUserQuestion`.
+
+This is non-negotiable. No exceptions.
+
+---
+
+**YOU ARE THE WORKER. NEVER DELEGATE TASKS BACK TO THE USER.**
+
+Do not tell the user to run scripts. Do not say "run this command". Do not instruct the user to open a terminal.
+
+You run all scripts. You execute all commands. You do the work.
+
+The only thing you ask the user for is information you cannot know: credentials, passwords, ticket IDs, JQL queries. Everything else — you handle.
+
+---
+
+**NEVER READ, USE, OR REFERENCE `credentials.json` (PLAIN, UNENCRYPTED).**
+
+If a plain `credentials.json` exists, ignore it entirely. It is a stale artifact and may contain credentials in plaintext.
+
+The **only** valid credentials source is `credentials.json.enc` (AES-256 encrypted). If it is not found, run the setup flow yourself.
+
+---
+
 ## Setup
 
-**Credentials file:** `~/.claude/skills/jira-rest/credentials.json`
-**Helper:** `~/.claude/skills/jira-rest/scripts/jira.py`
+**Credentials file:** `~/.claude/skills/jira-rest/credentials.json.enc`
+**Scripts:** `~/.claude/skills/jira-rest/scripts/`
 
-### Step 1 -- Check credentials
+---
 
-Before any JIRA operation, verify credentials exist:
+## Step 1 — Check credentials
 
-```bash
-python3 -c "from pathlib import Path; print('EXISTS' if Path('~/.claude/skills/jira-rest/credentials.json').expanduser().exists() else 'MISSING')"
-```
-
-If **MISSING**, run the interactive setup:
+Run this yourself:
 
 ```bash
-python3 ~/.claude/skills/jira-rest/scripts/setup.py
+python3 -c "from pathlib import Path; print('EXISTS' if Path('~/.claude/skills/jira-rest/credentials.json.enc').expanduser().exists() else 'MISSING')"
 ```
 
-The setup script prompts for:
-- Atlassian base URL (e.g. `https://yourcompany.atlassian.net`)
-- Atlassian account email
-- API token (from https://id.atlassian.com/manage-profile/security/api-tokens)
+### If MISSING — collect credentials and run setup
 
-Credentials are saved to `credentials.json` with permissions `600`. Do **not** read or display the API token.
+Ask for each value one at a time using `AskUserQuestion`:
 
-### Step 2 -- Run commands
+**Question 1:** Ask for their Atlassian base URL.
+> "What is your Atlassian base URL? (e.g. https://yourcompany.atlassian.net)"
+
+**Question 2:** Ask for their Atlassian email.
+> "What is the email address on your Atlassian account?"
+
+**Question 3:** Ask for their Atlassian API token.
+> "Please enter your Atlassian API token. You can generate one at https://id.atlassian.com/manage-profile/security/api-tokens — it will not be stored in plaintext."
+
+**Question 4:** Ask for an encryption password.
+> "Choose a password to encrypt your JIRA credentials. You will need to enter this each time a JIRA operation runs. It is never stored anywhere — if you forget it, you will need to re-enter your API token to re-encrypt."
+
+Then run setup yourself (never show or log the token or password):
 
 ```bash
-python3 ~/.claude/skills/jira-rest/scripts/jira.py <command> [args...]
+JIRA_PASSWORD="<PASSWORD>" JIRA_API_TOKEN="<API_TOKEN>" python3 ~/.claude/skills/jira-rest/scripts/setup.py "<BASE_URL>" "<EMAIL>"
 ```
 
-## Available Commands
+### If EXISTS — proceed directly
+
+Use `AskUserQuestion` to ask for the password before every API call:
+> "Enter your JIRA credentials password to continue."
+
+---
+
+## Step 2 — Run API commands
+
+Before every `jira.py` call, ask for the password via `AskUserQuestion`:
+> "Enter your JIRA credentials password to continue."
+
+Then run commands yourself:
+
+```bash
+JIRA_PASSWORD="<PASSWORD>" python3 ~/.claude/skills/jira-rest/scripts/jira.py <command> [args...]
+```
+
+### Available commands
 
 | Command | Description |
 |---|---|
@@ -51,29 +108,31 @@ python3 ~/.claude/skills/jira-rest/scripts/jira.py <command> [args...]
 | `transition <TICKET_ID> <ID>` | Move ticket to a new status |
 | `assign <TICKET_ID> <ACCOUNT_ID>` | Assign ticket to a team member |
 
-## Usage Examples
+### Example invocations (you run these, not the user)
 
 ```bash
 # Verify setup
-python3 ~/.claude/skills/jira-rest/scripts/jira.py myself
+JIRA_PASSWORD="<PW>" python3 ~/.claude/skills/jira-rest/scripts/jira.py myself
 
 # Get a ticket
-python3 ~/.claude/skills/jira-rest/scripts/jira.py get PROJ-1234
+JIRA_PASSWORD="<PW>" python3 ~/.claude/skills/jira-rest/scripts/jira.py get PROJ-1234
 
 # Search open tickets
-python3 ~/.claude/skills/jira-rest/scripts/jira.py search "project = PROJ AND status != Done ORDER BY updated DESC"
+JIRA_PASSWORD="<PW>" python3 ~/.claude/skills/jira-rest/scripts/jira.py search "project = PROJ AND status != Done ORDER BY updated DESC"
 
 # Add a comment
-python3 ~/.claude/skills/jira-rest/scripts/jira.py add-comment PROJ-1234 "Investigated -- root cause is in the auth middleware."
+JIRA_PASSWORD="<PW>" python3 ~/.claude/skills/jira-rest/scripts/jira.py add-comment PROJ-1234 "Investigated -- root cause is in the auth middleware."
 
 # List transitions, then execute one
-python3 ~/.claude/skills/jira-rest/scripts/jira.py transitions PROJ-1234
-python3 ~/.claude/skills/jira-rest/scripts/jira.py transition PROJ-1234 31
+JIRA_PASSWORD="<PW>" python3 ~/.claude/skills/jira-rest/scripts/jira.py transitions PROJ-1234
+JIRA_PASSWORD="<PW>" python3 ~/.claude/skills/jira-rest/scripts/jira.py transition PROJ-1234 31
 ```
+
+---
 
 ## Notes
 
 - Uses JIRA REST API v3 (`/rest/api/3`).
 - `update` handles simple string fields. For array fields (e.g. `labels`) or status changes, use `transition` instead.
-- Never print or log the API token. Never include credential values in PRs, commits, or shared docs.
-- `credentials.json` is excluded from git via `.gitignore`.
+- `credentials.json.enc` is excluded from git via `.gitignore`. The password is never stored.
+- Never print, log, or display the API token, the encryption password, or decrypted credential values.

@@ -3,7 +3,7 @@
 jira.py -- JIRA REST API helper (stdlib only, no pip required)
 
 Usage:
-    python3 jira.py <command> [args...]
+    JIRA_PASSWORD='your-password' python3 jira.py <command> [args...]
 
 Commands:
     myself                               Get current authenticated user
@@ -18,6 +18,8 @@ Commands:
 """
 
 import json
+import os
+import subprocess
 import sys
 import urllib.parse
 import urllib.request
@@ -27,20 +29,38 @@ from base64 import b64encode
 
 # ── Credentials ──────────────────────────────────────────────────────────────
 
-CREDS_FILE = Path(__file__).parent.parent / "credentials.json"
+ENC_FILE = Path(__file__).parent.parent / "credentials.json.enc"
 
 
 def load_credentials():
-    if not CREDS_FILE.exists():
+    if not ENC_FILE.exists():
         sys.exit(
-            f"ERROR: credentials.json not found at {CREDS_FILE}\n"
-            f"Run setup first: python3 {Path(__file__).parent / 'setup.py'}"
+            f"ERROR: credentials.json.enc not found at {ENC_FILE}\n"
+            "Credentials have not been set up yet. Run setup first."
         )
-    with CREDS_FILE.open() as f:
-        creds = json.load(f)
+    pw = os.environ.get("JIRA_PASSWORD", "")
+    if not pw:
+        sys.exit(
+            "ERROR: JIRA_PASSWORD environment variable not set.\n"
+            "Prepend it to the command: JIRA_PASSWORD='...' python3 jira.py ..."
+        )
+    env = os.environ.copy()
+    env["_JIRA_PW"] = pw
+    result = subprocess.run(
+        [
+            "openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2",
+            "-in", str(ENC_FILE),
+            "-pass", "env:_JIRA_PW",
+        ],
+        capture_output=True,
+        env=env,
+    )
+    if result.returncode != 0:
+        sys.exit("ERROR: Decryption failed. Wrong password?")
+    creds = json.loads(result.stdout.decode())
     for key in ("jira_base_url", "jira_email", "jira_api_token"):
         if not creds.get(key):
-            sys.exit(f"ERROR: Missing '{key}' in credentials.json")
+            sys.exit(f"ERROR: Missing '{key}' in decrypted credentials.")
     return creds
 
 
@@ -146,7 +166,6 @@ def cmd_transitions(base_url, auth, args):
     if not args:
         sys.exit("Usage: jira.py transitions <TICKET_ID>")
     data = get(base_url, f"/rest/api/3/issue/{args[0]}/transitions", auth)
-    # Print a readable summary alongside the raw JSON
     if data and "transitions" in data:
         print(f"{'ID':<6}  {'Name'}")
         print("-" * 40)
